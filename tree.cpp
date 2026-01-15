@@ -2,19 +2,8 @@
 #include <iomanip>
 #include <string>
 #include <fstream>
+#include "queue.hpp"
 using namespace std;
-
-/*
-    Each booking represents ONE hour slot for a room.
-    Multi-hour classes are split into multiple Booking records.
-*/
-struct Booking {
-    string date;      // YYMMDD  (e.g. 260102 = 2 Jan 2026)
-    int hour;         // 8 - 16 (8am to 5pm)
-    string room;      // e.g. C301
-    string lecturer;  // Lecturer name
-    string course;    // Course code
-};
 
 struct TreeNode {
     Booking info;
@@ -22,19 +11,49 @@ struct TreeNode {
     TreeNode* right;
 };
 
-/*
-    This function creates a UNIQUE KEY for every booking.
-    The BST will be sorted using this key.
-    Format: YYMMDD + HH + Room
-    Example: 26010210C301
-*/
+struct WaitlistEntry {
+    string slotKey;
+    WaitlistQueue* queue;
+    WaitlistEntry* next;
+};
+
+WaitlistEntry* waitlistHead = NULL;
+
+WaitlistQueue* getWaitlist(string key) {
+    WaitlistEntry* current = waitlistHead;
+    
+    while (current != NULL) {
+        if (current->slotKey == key) {
+            return current->queue;
+        }
+        current = current->next;
+    }
+    
+    WaitlistEntry* newEntry = new WaitlistEntry;
+    newEntry->slotKey = key;
+    newEntry->queue = new WaitlistQueue();
+    newEntry->queue->createQueue();
+    newEntry->next = waitlistHead;
+    waitlistHead = newEntry;
+    
+    return newEntry->queue;
+}
+
+bool hasWaitlist(string key) {
+    WaitlistEntry* current = waitlistHead;
+    while (current != NULL) {
+        if (current->slotKey == key) {
+            return !current->queue->isEmpty();
+        }
+        current = current->next;
+    }
+    return false;
+}
+
 string makeKey(const Booking& b) {
     return b.date + (b.hour < 10 ? "0" : "") + to_string(b.hour) + b.room;
 }
 
-/*
-    Overloaded version to build a key directly from input.
-*/
 string makeKey(string date, int hour, string room) {
     return date + (hour < 10 ? "0" : "") + to_string(hour) + room;
 }
@@ -87,7 +106,6 @@ bool Delete(TreeNode*& tree, string key) {
     else if (key > curKey)
         return Delete(tree->right, key);
     else {
-        // Node found
         if (tree->left == NULL && tree->right == NULL) {
             delete tree;
             tree = NULL;
@@ -103,7 +121,6 @@ bool Delete(TreeNode*& tree, string key) {
             delete temp;
         }
         else {
-            // Two children: replace with inorder successor
             TreeNode* temp = FindMin(tree->right);
             tree->info = temp->info;
             Delete(tree->right, makeKey(temp->info));
@@ -161,10 +178,6 @@ void DisplayByRoom(TreeNode* tree, string room) {
     }
 }
 
-/*
-    Validate that date is in YYMMDD format
-    and month/day are in valid range.
-*/
 bool validDate(string d) {
     if (d.length() != 6) return false;
 
@@ -220,7 +233,8 @@ void menu() {
     cout << "4. Display All Bookings\n";
     cout << "5. Display Schedule by Date\n";
     cout << "6. Display Schedule by Room\n";
-    cout << "7. Exit\n";
+    cout << "7. View Waitlist for a Slot\n";
+    cout << "8. Exit\n";
     cout << "Choose: ";
 }
 
@@ -234,7 +248,6 @@ int main() {
         menu();
         cin >> choice;
 
-        // Book room
         if (choice == 1) {
             Booking b;
             int duration;
@@ -268,22 +281,30 @@ int main() {
 
             do {
                 cout << "Enter Room (1-20): ";
-                cin >> duration;
+                cin >> b.room;
 
-                if (!(b.room >= "1" && b.room <= "20"))
-                    cout << "Chooese a existing room to book\n";
+                try {
+                    int roomNum = stoi(b.room); // Convert string input to integer
+                    
+                    if (roomNum >= 1 && roomNum <= 20) {
+                        break; // Valid room, exit the loop
+                    } else {
+                        cout << "Choose an existing room (1-20) to book\n";
+                    }
+                } catch (...) {
+                    // This handles cases where the user types letters instead of numbers
+                    cout << "Invalid input. Please enter a number between 1 and 20.\n";
+                }
 
-            } while (!(b.room >= "1" && b.room <= "20"));
+            } while (true);
             
             cin.ignore(); 
-a
             cout << "Enter Lecturer: ";
             getline(cin, b.lecturer);
 
             cout << "Enter Course: ";
             getline(cin, b.course);
 
-            // Check if any of the required time slots is already booked
             bool conflict = false;
             for (int i = 0; i < duration; i++) {
                 Booking temp = b;
@@ -296,9 +317,24 @@ a
             }
 
             if (conflict) {
-                cout << "Error: One or more time slots already booked.\n";
+                cout << "\nError: One or more time slots already booked.\n";
+                cout << "Would you like to join the waitlist? (y/n): ";
+                char response;
+                cin >> response;
+
+                if (response == 'y' || response == 'Y') {
+                    for (int i = 0; i < duration; i++) {
+                        Booking temp = b;
+                        temp.hour = b.hour + i;
+                        string key = makeKey(temp);
+                        WaitlistQueue* wq = getWaitlist(key);
+                        wq->enQueue(temp);
+                    }
+                    cout << "Added to waitlist successfully!\n";
+                } else {
+                    cout << "Booking not added to waitlist.\n";
+                }
             } else {
-                // Insert each hour into BST
                 for (int i = 0; i < duration; i++) {
                     Booking temp = b;
                     temp.hour = b.hour + i;
@@ -309,7 +345,6 @@ a
             }
         }
 
-        // Cancel booking
         else if (choice == 2) {
             string date, room;
             int hour;
@@ -321,21 +356,42 @@ a
             cout << "Enter Room: ";
             cin >> room;
 
-            if (Delete(root, makeKey(date, hour, room))){
+            string key = makeKey(date, hour, room);
+
+            if (Delete(root, key)){
                 RewriteFile(root);
                 cout << "Booking cancelled.\n";
+
+                if (hasWaitlist(key)) {
+                    WaitlistQueue* wq = getWaitlist(key);
+                    Booking* nextBooking = wq->deQueue();
+
+                    if (nextBooking) {
+                        // Insert the booking into the BST
+                        Insert(root, *nextBooking);
+                        
+                        // Update the physical file to reflect the change
+                        RewriteFile(root);
+
+                        cout << "\n[System] Waitlist found for this slot." << endl;
+                        cout << "[System] Automatically promoted: " << nextBooking->lecturer 
+                            << " (" << nextBooking->course << ")." << endl;
+                        
+                        // Clean up the memory allocated for the booking object from the queue
+                        delete nextBooking; 
+                    }
+                }
             }
             else
                 cout << "Booking not found.\n";
         }
 
-        // Search booking
         else if (choice == 3) {
             string date, room;
             int hour;
             Booking b;
 
-            cout << "Enter Date (YYMMDD): ";
+            cout << "Enter Date (DDMMYY): ";
             cin >> date;
             cout << "Enter Time: ";
             cin >> hour;
@@ -351,7 +407,6 @@ a
             }
         }
 
-        // Display all bookings
         else if (choice == 4) {
             cout << "\n===========================================================\n";
             cout << "|  Date  | Time | Room   | Lecturer     | Course     |\n";
@@ -388,7 +443,42 @@ a
             cout << "===========================================================\n";
         }
 
-    } while (choice != 7);
+        else if (choice == 7) {
+            string date, room;
+            int hour;
+
+            cout << "Enter Date (YYMMDD): ";
+            cin >> date;
+            cout << "Enter Time: ";
+            cin >> hour;
+            cout << "Enter Room: ";
+            cin >> room;
+
+            string key = makeKey(date, hour, room);
+
+            cout << "\n--- Waitlist for " << date << " at " << hour << ":00 in Room " << room << " ---\n";
+            
+            if (hasWaitlist(key)) {
+                WaitlistQueue* wq = getWaitlist(key);
+                wq->display();
+                cout << "Total waiting: " << wq->getSize() << "\n";
+            } else {
+                cout << "No waitlist exists for this slot.\n";
+            }
+        }
+
+    } while (choice != 8);
+
+    WaitlistEntry* current = waitlistHead;
+    while (current != NULL) {
+        WaitlistEntry* temp = current;
+        current = current->next;
+        if (temp->queue) {
+            temp->queue->destroyQueue();
+            delete temp->queue;
+        }
+        delete temp;
+    }
 
     return 0;
 }
