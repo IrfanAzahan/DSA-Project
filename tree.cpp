@@ -3,6 +3,7 @@
 #include <string>
 #include <fstream>
 #include "queue.hpp"
+#include "stack.hpp"
 using namespace std;
 
 struct TreeNode {
@@ -144,37 +145,28 @@ void Display(TreeNode* tree) {
     }
 }
 
-void DisplayByDate(TreeNode* tree, string date) {
+
+void CollectDateHistory(TreeNode* tree, string date, BookingStack& history) {
     if (tree != NULL) {
-        DisplayByDate(tree->left, date);
-
+        CollectDateHistory(tree->left, date, history);
+        
         if (tree->info.date == date) {
-            cout << "| " << setw(6) << tree->info.date
-                 << " | " << setw(2) << tree->info.hour << ":00"
-                 << " | " << setw(6) << tree->info.room
-                 << " | " << setw(12) << tree->info.lecturer
-                 << " | " << setw(10) << tree->info.course
-                 << " |\n";
+            history.push(tree->info);
         }
-
-        DisplayByDate(tree->right, date);
+        
+        CollectDateHistory(tree->right, date, history);
     }
 }
 
-void DisplayByRoom(TreeNode* tree, string room) {
+void CollectRoomHistory(TreeNode* tree, string room, BookingStack& history) {
     if (tree != NULL) {
-        DisplayByRoom(tree->left, room);
-
+        CollectRoomHistory(tree->left, room, history);
+        
         if (tree->info.room == room) {
-            cout << "| " << setw(6) << tree->info.date
-                 << " | " << setw(2) << tree->info.hour << ":00"
-                 << " | " << setw(6) << tree->info.room
-                 << " | " << setw(12) << tree->info.lecturer
-                 << " | " << setw(10) << tree->info.course
-                 << " |\n";
+            history.push(tree->info);
         }
 
-        DisplayByRoom(tree->right, room);
+        CollectRoomHistory(tree->right, room, history);
     }
 }
 
@@ -420,13 +412,20 @@ int main() {
             cout << "Enter Date (YYMMDD): ";
             cin >> date;
 
-            cout << "\n===========================================================\n";
-            cout << "|  Date  | Time | Room   | Lecturer     | Course     |\n";
-            cout << "===========================================================\n";
+            BookingStack history;
+            CollectDateHistory(root, date, history);
 
-            DisplayByDate(root, date);
-
-            cout << "===========================================================\n";
+            if (history.isEmpty()) {
+                cout << "\nNo booking history for Room " << date << ".\n";
+            } else {
+                cout << "\n===========================================================\n";
+                cout << "|  Date  | Time | Room   | Lecturer     | Course     |\n";
+                cout << "===========================================================\n";
+                
+                history.display();
+                
+                cout << "===========================================================\n";
+            }
         }
 
         else if (choice == 6) {
@@ -434,13 +433,20 @@ int main() {
             cout << "Enter Room: ";
             cin >> room;
 
-            cout << "\n===========================================================\n";
-            cout << "|  Date  | Time | Room   | Lecturer     | Course     |\n";
-            cout << "===========================================================\n";
+            BookingStack history;
+            CollectRoomHistory(root, room, history);
 
-            DisplayByRoom(root, room);
-
-            cout << "===========================================================\n";
+            if (history.isEmpty()) {
+                cout << "\nNo booking history for Room " << room << ".\n";
+            } else {
+                cout << "\n===========================================================\n";
+                cout << "|  Date  | Time | Room   | Lecturer     | Course     |\n";
+                cout << "===========================================================\n";
+                
+                history.display();
+                
+                cout << "===========================================================\n";
+            }
         }
 
         else if (choice == 7) {
