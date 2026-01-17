@@ -276,15 +276,15 @@ int main() {
                 cin >> b.room;
 
                 try {
-                    int roomNum = stoi(b.room); // Convert string input to integer
+                    int roomNum = stoi(b.room); 
                     
                     if (roomNum >= 1 && roomNum <= 20) {
-                        break; // Valid room, exit the loop
+                        break; 
                     } else {
                         cout << "Choose an existing room (1-20) to book\n";
                     }
                 } catch (...) {
-                    // This handles cases where the user types letters instead of numbers
+               
                     cout << "Invalid input. Please enter a number between 1 and 20.\n";
                 }
 
@@ -339,43 +339,55 @@ int main() {
 
         else if (choice == 2) {
             string date, room;
-            int hour;
+            int startHour, duration;
 
             cout << "Enter Date (YYMMDD): ";
             cin >> date;
-            cout << "Enter Time: ";
-            cin >> hour;
+
+            cout << "Enter Start Hour (8-16): ";
+            cin >> startHour;
+
+            cout << "Enter Duration (hours): ";
+            cin >> duration;
+
             cout << "Enter Room: ";
             cin >> room;
 
-            string key = makeKey(date, hour, room);
+            bool found = false;
 
-            if (Delete(root, key)){
-                RewriteFile(root);
-                cout << "Booking cancelled.\n";
+            for (int i = 0; i < duration; i++) {
+                int hour = startHour + i;
+                string key = makeKey(date, hour, room);
 
-                if (hasWaitlist(key)) {
-                    WaitlistQueue* wq = getWaitlist(key);
-                    Booking* nextBooking = wq->deQueue();
+                if (Delete(root, key)) {
+                    found = true;
 
-                    if (nextBooking) {
-                        // Insert the booking into the BST
-                        Insert(root, *nextBooking);
-                        
-                        // Update the physical file to reflect the change
-                        RewriteFile(root);
+                   
+                    if (hasWaitlist(key)) {
+                        WaitlistQueue* wq = getWaitlist(key);
+                        Booking* nextBooking = wq->deQueue();
 
-                        cout << "\n[System] Waitlist found for this slot." << endl;
-                        cout << "[System] Automatically promoted: " << nextBooking->lecturer 
-                            << " (" << nextBooking->course << ")." << endl;
-                        
-                        // Clean up the memory allocated for the booking object from the queue
-                        delete nextBooking; 
+                        if (nextBooking) {
+                            Insert(root, *nextBooking);
+
+                            cout << "\n[System] Waitlist found for slot " 
+                                << date << " " << hour << ":00 Room " << room << endl;
+                            cout << "[System] Automatically promoted: " 
+                                << nextBooking->lecturer 
+                                << " (" << nextBooking->course << ")" << endl;
+
+                            delete nextBooking;
+                        }
                     }
                 }
             }
-            else
-                cout << "Booking not found.\n";
+
+            if (found) {
+                RewriteFile(root);  
+                cout << "\nBooking cancelled successfully.\n";
+            } else {
+                cout << "No matching booking found.\n";
+            }
         }
 
         else if (choice == 3) {
